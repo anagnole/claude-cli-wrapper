@@ -46,9 +46,14 @@ export const messagesRoute: FastifyPluginAsync = async (app) => {
 
     // Session lookup for multi-turn (unless caller explicitly provides resume_session_id)
     let resumeId = body.resume_session_id ?? null;
+    let savedOptions = {};
     if (!resumeId && !body.continue_conversation) {
       const contextHash = SessionMap.hashContext(body.messages);
-      resumeId = sessionMap.lookup(contextHash, model);
+      const saved = sessionMap.lookup(contextHash, model);
+      if (saved) {
+        resumeId = saved.sessionId;
+        savedOptions = saved.options;
+      }
     }
 
     if (resumeId) {
@@ -56,6 +61,9 @@ export const messagesRoute: FastifyPluginAsync = async (app) => {
     }
 
     const spawnOpts = {
+      // Saved options from previous session (system prompt, MCP config, permissions, etc.)
+      ...savedOptions,
+      // Current request overrides
       prompt,
       model,
       claudePath: config.claudePath,
@@ -150,7 +158,7 @@ async function handleNonStreaming(
       ...messages,
       { role: "assistant", content: response.content[0]?.text ?? "" },
     ];
-    sessionMap.store(fullMessages, cliResult.session_id, spawnOpts.model!);
+    sessionMap.store(fullMessages, cliResult.session_id, spawnOpts.model!, spawnOpts);
   }
 
   request.log.info({
@@ -246,7 +254,7 @@ async function handleStreaming(
           ...messages,
           { role: "assistant", content: assistantText },
         ];
-        sessionMap.store(fullMessages, state.sessionId, spawnOpts.model!);
+        sessionMap.store(fullMessages, state.sessionId, spawnOpts.model!, spawnOpts);
       }
 
       request.log.info({

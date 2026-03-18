@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
+import type { SpawnOptions } from "../cli/spawn.js";
 import type { MessageParam } from "../types.js";
+
+export interface SessionLookup {
+  sessionId: string;
+  options: Omit<SpawnOptions, "prompt" | "streaming" | "resumeSessionId" | "continueConversation">;
+}
 
 interface SessionEntry {
   cliSessionId: string;
   lastUsedAt: number;
   model: string;
+  options: SessionLookup["options"];
 }
 
 export class SessionMap {
@@ -19,22 +26,26 @@ export class SessionMap {
     return createHash("sha256").update(payload).digest("hex").slice(0, 16);
   }
 
-  /** Look up a CLI session ID for a given context hash + model. */
-  lookup(hash: string, model: string): string | null {
+  /** Look up a session + its original spawn options for a given context hash + model. */
+  lookup(hash: string, model: string): SessionLookup | null {
     const entry = this.map.get(hash);
     if (!entry || entry.model !== model) return null;
     entry.lastUsedAt = Date.now();
-    return entry.cliSessionId;
+    return { sessionId: entry.cliSessionId, options: entry.options };
   }
 
   /**
    * Store a session after a successful CLI invocation.
    * `fullMessages` should include the original messages + the assistant response,
    * so the *next* request with that history will find this session.
+   * `options` are the SpawnOptions used, stored for replay on resume.
    */
-  store(fullMessages: MessageParam[], cliSessionId: string, model: string): void {
-    // The next request will hash messages[0..n-1] (all except its new user msg),
-    // which equals the full messages from this turn.
+  store(
+    fullMessages: MessageParam[],
+    cliSessionId: string,
+    model: string,
+    options?: SessionLookup["options"],
+  ): void {
     const nextHash = createHash("sha256")
       .update(JSON.stringify(fullMessages))
       .digest("hex")
@@ -44,6 +55,7 @@ export class SessionMap {
       cliSessionId,
       lastUsedAt: Date.now(),
       model,
+      options: options ?? {},
     });
 
     this.evictIfNeeded();

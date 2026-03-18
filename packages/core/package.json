@@ -1,6 +1,6 @@
 {
   "name": "@anagnole/claude-cli-wrapper",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Shared library for spawning, parsing, and managing Claude Code CLI sessions",
   "type": "module",
   "main": "dist/index.js",

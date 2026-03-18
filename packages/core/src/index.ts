@@ -5,6 +5,7 @@ export { NdjsonParser } from "./cli/parser.js";
 
 // Session
 export { SessionMap } from "./session/session-map.js";
+export type { SessionLookup } from "./session/session-map.js";
 
 // Transform
 export { extractPrompt, extractSystem, warnUnsupported } from "./transform/request.js";
