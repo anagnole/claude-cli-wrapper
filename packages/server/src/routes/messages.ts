@@ -13,7 +13,7 @@ import {
   apiError,
   type MessageParam,
   type MessagesRequest,
-} from "@anagnole/claude-cli";
+} from "@anagnole/claude-cli-wrapper";
 import { config } from "../config.js";
 
 // Track active processes for abort support

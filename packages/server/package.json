@@ -8,7 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@anagnole/claude-cli": "workspace:*",
+    "@anagnole/claude-cli-wrapper": "workspace:*",
     "fastify": "^5.7.4",
     "@fastify/cors": "^11.2.0"
   }

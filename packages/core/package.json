@@ -1,5 +1,5 @@
 {
-  "name": "@anagnole/claude-cli",
+  "name": "@anagnole/claude-cli-wrapper",
   "version": "0.1.1",
   "description": "Shared library for spawning, parsing, and managing Claude Code CLI sessions",
   "type": "module",

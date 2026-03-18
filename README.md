@@ -2,7 +2,7 @@
 
 A monorepo with two packages for integrating the Claude Code CLI into your projects:
 
-- **[`@anagnole/claude-cli`](https://www.npmjs.com/package/@anagnole/claude-cli)** — Shared library for spawning, parsing, and managing Claude CLI sessions. Published on npm — install with `npm install @anagnole/claude-cli`.
+- **[`@anagnole/claude-cli-wrapper`](https://www.npmjs.com/package/@anagnole/claude-cli-wrapper)** — Shared library for spawning, parsing, and managing Claude CLI sessions. Published on npm — install with `npm install @anagnole/claude-cli-wrapper`.
 - **`@anagnole/claude-api-server`** — Anthropic Messages API-compatible HTTP server. Point any Anthropic SDK at it and use your Claude Max subscription as a local API.
 
 Both expose the full power of the Claude CLI — MCP servers, permission modes, tool control, git worktrees, cost limits, and more.
@@ -26,7 +26,7 @@ The server starts at `http://127.0.0.1:4301`.
 For projects that want programmatic control over Claude CLI processes without an HTTP layer.
 
 ```bash
-npm install @anagnole/claude-cli
+npm install @anagnole/claude-cli-wrapper
 ```
 
 Or as a local workspace reference:
@@ -34,7 +34,7 @@ Or as a local workspace reference:
 ```json
 {
   "dependencies": {
-    "@anagnole/claude-cli": "workspace:*"
+    "@anagnole/claude-cli-wrapper": "workspace:*"
   }
 }
 ```
@@ -44,7 +44,7 @@ Or reference it directly via path in your project's `package.json`.
 #### Basic usage
 
 ```typescript
-import { spawnClaude, NdjsonParser } from "@anagnole/claude-cli";
+import { spawnClaude, NdjsonParser } from "@anagnole/claude-cli-wrapper";
 
 // Spawn a Claude CLI process
 const child = spawnClaude({
@@ -65,7 +65,7 @@ child.stdout.on("data", (chunk) => {
 #### With full CLI options
 
 ```typescript
-import { spawnClaude } from "@anagnole/claude-cli";
+import { spawnClaude } from "@anagnole/claude-cli-wrapper";
 
 const child = spawnClaude({
   prompt: "Fix the auth bug",
@@ -108,7 +108,7 @@ const child = spawnClaude({
 #### Session management
 
 ```typescript
-import { SessionMap } from "@anagnole/claude-cli";
+import { SessionMap } from "@anagnole/claude-cli-wrapper";
 
 const sessions = new SessionMap();
 
@@ -130,7 +130,7 @@ import {
   createStreamState,  // Initialize SSE streaming state
   transformEvent,     // CLI NDJSON event → Anthropic SSE strings
   generateMsgId,      // Generate msg_... IDs
-} from "@anagnole/claude-cli";
+} from "@anagnole/claude-cli-wrapper";
 ```
 
 #### All exports
@@ -329,7 +329,7 @@ You can also pass `resume_session_id` directly (returned as `session_id` in ever
 
 ```
 packages/
-  core/                  # @anagnole/claude-cli — shared library
+  core/                  # @anagnole/claude-cli-wrapper — shared library
     src/
       index.ts           # Barrel export
       types.ts           # Request/response types + CLI extensions

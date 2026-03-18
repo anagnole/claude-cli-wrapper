@@ -22,7 +22,7 @@ importers:
 
   packages/server:
     dependencies:
-      '@anagnole/claude-cli':
+      '@anagnole/claude-cli-wrapper':
         specifier: workspace:*
         version: link:../core
       '@fastify/cors':

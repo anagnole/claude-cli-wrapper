@@ -1,11 +1,11 @@
-# @anagnole/claude-cli
+# @anagnole/claude-cli-wrapper
 
 A shared library for spawning, parsing, and managing [Claude Code CLI](https://code.claude.com) sessions from TypeScript/Node.js. Exposes the full power of the CLI — MCP servers, permission modes, tool control, git worktrees, cost limits, and more.
 
 ## Install
 
 ```bash
-npm install @anagnole/claude-cli
+npm install @anagnole/claude-cli-wrapper
 ```
 
 Requires the Claude CLI (`claude`) to be installed and available in your PATH.
@@ -13,7 +13,7 @@ Requires the Claude CLI (`claude`) to be installed and available in your PATH.
 ## Basic usage
 
 ```typescript
-import { spawnClaude, NdjsonParser } from "@anagnole/claude-cli";
+import { spawnClaude, NdjsonParser } from "@anagnole/claude-cli-wrapper";
 
 // Spawn a Claude CLI process
 const child = spawnClaude({
@@ -34,7 +34,7 @@ child.stdout.on("data", (chunk) => {
 ## Full CLI options
 
 ```typescript
-import { spawnClaude } from "@anagnole/claude-cli";
+import { spawnClaude } from "@anagnole/claude-cli-wrapper";
 
 const child = spawnClaude({
   prompt: "Fix the auth bug",
@@ -80,7 +80,7 @@ const child = spawnClaude({
 ## Session management
 
 ```typescript
-import { SessionMap, type MessageParam } from "@anagnole/claude-cli";
+import { SessionMap, type MessageParam } from "@anagnole/claude-cli-wrapper";
 
 const sessions = new SessionMap();
 
@@ -113,7 +113,7 @@ import {
   generateMsgId,      // Generate msg_... IDs
   createStreamState,  // Initialize SSE streaming state
   transformEvent,     // CLI NDJSON event → Anthropic SSE strings
-} from "@anagnole/claude-cli";
+} from "@anagnole/claude-cli-wrapper";
 ```
 
 ## Subpath imports
@@ -121,10 +121,10 @@ import {
 For lighter imports that avoid pulling in all modules:
 
 ```typescript
-import { spawnClaude } from "@anagnole/claude-cli/cli";
-import { NdjsonParser } from "@anagnole/claude-cli/parser";
-import { SessionMap } from "@anagnole/claude-cli/session";
-import type { MessagesRequest } from "@anagnole/claude-cli/types";
+import { spawnClaude } from "@anagnole/claude-cli-wrapper/cli";
+import { NdjsonParser } from "@anagnole/claude-cli-wrapper/parser";
+import { SessionMap } from "@anagnole/claude-cli-wrapper/session";
+import type { MessagesRequest } from "@anagnole/claude-cli-wrapper/types";
 ```
 
 ## All exports
