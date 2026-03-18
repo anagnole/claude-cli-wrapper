@@ -1,0 +1,15 @@
+{
+  "name": "@anagnole/claude-api-server",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@anagnole/claude-cli": "workspace:*",
+    "fastify": "^5.7.4",
+    "@fastify/cors": "^11.2.0"
+  }
+}

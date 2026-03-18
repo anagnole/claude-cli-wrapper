@@ -1,0 +1,14 @@
+{
+  "name": "claude-api",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter ./packages/server dev",
+    "start": "pnpm --filter ./packages/server start",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}

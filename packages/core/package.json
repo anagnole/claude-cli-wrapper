@@ -1,0 +1,49 @@
+{
+  "name": "@anagnole/claude-cli",
+  "version": "0.1.1",
+  "description": "Shared library for spawning, parsing, and managing Claude Code CLI sessions",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/spawn.d.ts",
+      "default": "./dist/cli/spawn.js"
+    },
+    "./parser": {
+      "types": "./dist/cli/parser.d.ts",
+      "default": "./dist/cli/parser.js"
+    },
+    "./session": {
+      "types": "./dist/session/session-map.d.ts",
+      "default": "./dist/session/session-map.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc"
+  },
+  "keywords": [
+    "claude",
+    "cli",
+    "anthropic",
+    "proxy",
+    "agent"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
