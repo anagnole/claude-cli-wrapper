@@ -1,11 +1,11 @@
 # claude-api
 
-A monorepo with two packages for integrating the Claude Code CLI into your projects:
+A monorepo with two packages that provide a unified Anthropic Messages API for **Claude** (via the CLI) and **open-source models** (via Ollama):
 
-- **[`@anagnole/claude-cli-wrapper`](https://www.npmjs.com/package/@anagnole/claude-cli-wrapper)** — Shared library for spawning, parsing, and managing Claude CLI sessions. Published on npm — install with `npm install @anagnole/claude-cli-wrapper`.
-- **`@anagnole/claude-api-server`** — Anthropic Messages API-compatible HTTP server. Point any Anthropic SDK at it and use your Claude Max subscription as a local API.
+- **[`@anagnole/claude-cli-wrapper`](https://www.npmjs.com/package/@anagnole/claude-cli-wrapper)** — Shared library with a provider abstraction for Claude CLI and Ollama. Published on npm — install with `npm install @anagnole/claude-cli-wrapper`.
+- **`@anagnole/claude-api-server`** — Anthropic Messages API-compatible HTTP server. Point any Anthropic SDK at it and use Claude, Llama, Mistral, or any Ollama model through one endpoint.
 
-Both expose the full power of the Claude CLI — MCP servers, permission modes, tool control, git worktrees, cost limits, and more.
+The provider abstraction makes it easy to add new providers. Claude models route through the CLI (with full MCP, permissions, worktree support). Everything else routes to Ollama by default.
 
 ## Quick start
 
@@ -23,37 +23,91 @@ The server starts at `http://127.0.0.1:4301`.
 
 ### Option A: Use the core library directly (TypeScript/Node.js)
 
-For projects that want programmatic control over Claude CLI processes without an HTTP layer.
+For projects that want programmatic control over multiple model providers through a single interface.
 
 ```bash
 npm install @anagnole/claude-cli-wrapper
 ```
 
-Or as a local workspace reference:
+#### Provider abstraction
 
-```json
-{
-  "dependencies": {
-    "@anagnole/claude-cli-wrapper": "workspace:*"
-  }
-}
+The library provides a `Provider` interface with built-in implementations for Claude CLI and Ollama. Use the `ProviderRegistry` to route requests by model ID automatically.
+
+```typescript
+import {
+  ProviderRegistry,
+  ClaudeCliProvider,
+  OllamaProvider,
+} from "@anagnole/claude-cli-wrapper";
+
+// Build a registry with both providers
+const registry = new ProviderRegistry();
+registry.register(new ClaudeCliProvider({ defaultModel: "claude-sonnet-4-6" }));
+registry.register(new OllamaProvider({ baseUrl: "http://localhost:11434" }));
+
+// Route automatically by model ID
+const provider = registry.resolve("llama3.2:3b");   // → OllamaProvider
+const provider2 = registry.resolve("claude-sonnet-4-6"); // → ClaudeCliProvider
+
+// Same API regardless of provider
+const response = await provider.complete({
+  model: "llama3.2:3b",
+  messages: [{ role: "user", content: "Hello" }],
+});
+console.log(response.content[0].text);
+
+// Streaming works the same way
+const cancel = provider.stream(request, {
+  onEvent: (sse) => process.stdout.write(sse),
+  onDone: () => console.log("done"),
+  onError: (err) => console.error(err),
+});
 ```
 
-Or reference it directly via path in your project's `package.json`.
+Or use a provider directly:
 
-#### Basic usage
+```typescript
+const ollama = new OllamaProvider({ baseUrl: "http://gpu-box:11434" });
+const response = await ollama.complete({
+  model: "mistral:7b",
+  messages: [{ role: "user", content: "Hello" }],
+});
+```
+
+#### Custom providers
+
+Implement the `Provider` interface to add any model source:
+
+```typescript
+import type { Provider } from "@anagnole/claude-cli-wrapper";
+
+class TogetherProvider implements Provider {
+  readonly name = "together";
+  canHandle(model: string) { return model.startsWith("together/"); }
+  async listModels() { /* ... */ }
+  async complete(request) { /* ... */ }
+  stream(request, callbacks) { /* ... */ }
+}
+
+registry.register(new TogetherProvider({ apiKey: "..." }));
+```
+
+#### Low-level CLI access
+
+You can also use the Claude CLI directly for full control:
 
 ```typescript
 import { spawnClaude, NdjsonParser } from "@anagnole/claude-cli-wrapper";
 
-// Spawn a Claude CLI process
 const child = spawnClaude({
   prompt: "Explain this codebase",
   model: "claude-sonnet-4-6",
   streaming: true,
+  permissionMode: "bypassPermissions",
+  mcpConfig: "/path/to/mcp.json",
+  maxTurns: 10,
 });
 
-// Parse streaming NDJSON output
 const parser = new NdjsonParser();
 child.stdout.on("data", (chunk) => {
   for (const event of parser.feed(chunk.toString())) {
@@ -62,90 +116,19 @@ child.stdout.on("data", (chunk) => {
 });
 ```
 
-#### With full CLI options
-
-```typescript
-import { spawnClaude } from "@anagnole/claude-cli-wrapper";
-
-const child = spawnClaude({
-  prompt: "Fix the auth bug",
-  model: "claude-sonnet-4-6",
-  streaming: false,
-
-  // System prompt
-  systemPrompt: "You are a senior engineer.",
-  appendSystemPrompt: true,  // append to default instead of replacing
-
-  // Session management
-  resumeSessionId: "uuid-from-previous-run",
-  // or: continueConversation: true,
-
-  // Permissions & tools
-  permissionMode: "bypassPermissions",
-  allowedTools: ["Bash(git *)", "Read", "Edit"],
-  disallowedTools: ["Write"],
-
-  // MCP servers
-  mcpConfig: "/path/to/mcp-config.json",
-  strictMcpConfig: true,
-
-  // Workspace
-  workingDirectory: "/path/to/project",
-  worktree: "feature-branch",
-  addDirs: ["../shared-lib"],
-
-  // Safety limits
-  maxTurns: 10,
-  maxBudgetUsd: 1.00,
-
-  // Other
-  effort: "high",
-  fallbackModel: "claude-haiku-4-5",
-  jsonSchema: { type: "object", properties: { answer: { type: "string" } } },
-});
-```
-
-#### Session management
-
-`SessionMap` tracks sessions and automatically restores spawn options (system prompt, MCP config, permissions, etc.) on resume.
-
-```typescript
-import { SessionMap, spawnClaude } from "@anagnole/claude-cli-wrapper";
-
-const sessions = new SessionMap();
-
-// Store session with its config after a response
-sessions.store(allMessages, cliSessionId, "claude-sonnet-4-6", spawnOpts);
-
-// On next request — session ID + original config restored
-const hash = SessionMap.hashContext(messages);
-const saved = sessions.lookup(hash, "claude-sonnet-4-6");
-if (saved) {
-  spawnClaude({ ...saved.options, resumeSessionId: saved.sessionId, prompt, streaming: true });
-}
-```
-
-#### Transform helpers
-
-```typescript
-import {
-  extractPrompt,      // Get last user message as text
-  extractSystem,      // Flatten system prompt blocks to string
-  buildResponse,      // CLI JSON result → Anthropic API response shape
-  createStreamState,  // Initialize SSE streaming state
-  transformEvent,     // CLI NDJSON event → Anthropic SSE strings
-  generateMsgId,      // Generate msg_... IDs
-} from "@anagnole/claude-cli-wrapper";
-```
-
 #### All exports
 
 ```typescript
-// CLI
+// Providers
+ProviderRegistry, ClaudeCliProvider, OllamaProvider
+Provider, ModelInfo, ProviderStreamCallbacks  // types
+ClaudeCliProviderOptions, OllamaProviderConfig // types
+
+// CLI (low-level)
 spawnClaude, SpawnOptions, NdjsonParser
 
 // Session
-SessionMap
+SessionMap, SessionLookup
 
 // Transform
 extractPrompt, extractSystem, warnUnsupported
@@ -159,33 +142,23 @@ MessagesRequest, MessagesResponse, Usage, ApiError, apiError
 
 ### Option B: Use the HTTP API server
 
-For projects using any language/SDK that speaks the Anthropic Messages API.
+For projects using any language/SDK that speaks the Anthropic Messages API. Supports both Claude and Ollama models through the same endpoint.
 
-#### Environment variables
+#### Start the server
 
-Set these in your project:
+```bash
+pnpm dev
+# or with custom config:
+OLLAMA_BASE_URL=http://gpu-box:11434 CLAUDE_API_PORT=4301 pnpm dev
+```
+
+If Ollama is running, its models are available immediately. No config needed.
+
+#### Environment variables (for your client)
 
 ```bash
 ANTHROPIC_BASE_URL=http://127.0.0.1:4301
 ANTHROPIC_API_KEY=dummy   # any value works, auth is not enforced
-```
-
-#### Python (Anthropic SDK)
-
-```python
-import anthropic
-
-client = anthropic.Anthropic(
-    api_key="dummy",
-    base_url="http://127.0.0.1:4301",
-)
-
-message = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}],
-)
-print(message.content[0].text)
 ```
 
 #### TypeScript (Anthropic SDK)
@@ -198,17 +171,44 @@ const client = new Anthropic({
   baseURL: "http://127.0.0.1:4301",
 });
 
-const message = await client.messages.create({
+// Use Claude
+const msg1 = await client.messages.create({
   model: "claude-sonnet-4-6",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Hello!" }],
+});
+
+// Use Ollama models — same SDK, same endpoint
+const msg2 = await client.messages.create({
+  model: "llama3.2:3b",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Hello!" }],
 });
 ```
 
+#### Python (Anthropic SDK)
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    api_key="dummy",
+    base_url="http://127.0.0.1:4301",
+)
+
+# Works with any model — Claude or Ollama
+message = client.messages.create(
+    model="mistral:7b",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(message.content[0].text)
+```
+
 #### curl
 
 ```bash
-# Non-streaming
+# Claude model
 curl http://127.0.0.1:4301/v1/messages \
   -H "Content-Type: application/json" \
   -d '{
@@ -217,15 +217,25 @@ curl http://127.0.0.1:4301/v1/messages \
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 
+# Ollama model — same endpoint, same format
+curl http://127.0.0.1:4301/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3.2:3b",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
 # Streaming
 curl -N http://127.0.0.1:4301/v1/messages \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-6",
-    "max_tokens": 1024,
+    "model": "llama3.2:3b",
     "stream": true,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
+
+# List all models (Claude + Ollama)
+curl http://127.0.0.1:4301/v1/models
 ```
 
 ## API reference
@@ -238,7 +248,7 @@ Accepts the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages)
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `model` | string | Yes | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` |
+| `model` | string | Yes | Any Claude model (`claude-sonnet-4-6`) or Ollama model (`llama3.2:3b`, `mistral:7b`) |
 | `messages` | array | Yes | `[{ role, content }]` |
 | `max_tokens` | number | No | Accepted but not enforced |
 | `system` | string/array | No | System prompt |
@@ -246,7 +256,7 @@ Accepts the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages)
 | `effort` | string | No | `"low"` / `"medium"` / `"high"` / `"max"` |
 | `json_schema` | object | No | Structured output schema |
 
-**Accepted but ignored**: `temperature`, `top_p`, `top_k`, `stop_sequences`, `tools`, `tool_choice`
+**Ignored by Claude CLI**: `temperature`, `top_p`, `top_k`, `stop_sequences`, `tools`, `tool_choice` (Ollama supports `temperature`, `top_p`, `top_k`, `stop_sequences`)
 
 #### CLI extension parameters
 
@@ -329,6 +339,9 @@ You can also pass `resume_session_id` directly (returned as `session_id` in ever
 | `CLAUDE_API_PORT` | `4301` | Server port |
 | `CLAUDE_API_HOST` | `127.0.0.1` | Bind address |
 | `CLAUDE_PATH` | `claude` | Claude CLI binary path |
+| `OLLAMA_ENABLED` | `true` | Set to `"false"` to disable Ollama |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
+| `OLLAMA_MODEL_PREFIX` | `""` | Optional prefix (e.g. `"ollama/"`) to namespace model IDs |
 
 ## Architecture
 
@@ -338,28 +351,33 @@ packages/
     src/
       index.ts           # Barrel export
       types.ts           # Request/response types + CLI extensions
+      provider/
+        types.ts         # Provider interface, ModelInfo, callbacks
+        registry.ts      # ProviderRegistry — model routing + merged listing
+        claude-cli-provider.ts  # Claude CLI provider (spawn, sessions, transforms)
+        ollama-provider.ts      # Ollama HTTP provider (translate ↔ Anthropic format)
       cli/
         spawn.ts         # Spawn claude CLI with all flags
         parser.ts        # NDJSON line parser
       session/
-        session-map.ts   # Hash-based session tracking
+        session-map.ts   # Hash-based session tracking (used by ClaudeCliProvider)
       transform/
         request.ts       # Extract prompt, system, warn unsupported
         response.ts      # CLI result → API response
         stream.ts        # CLI NDJSON → SSE events
   server/                # @anagnole/claude-api-server — HTTP API
     src/
-      server.ts          # Fastify setup
-      config.ts          # Env-based config
+      server.ts          # Fastify setup + provider registry
+      config.ts          # Env-based config (Claude + Ollama)
       routes/
-        messages.ts      # POST /v1/messages
-        models.ts        # GET /v1/models
+        messages.ts      # POST /v1/messages (provider-agnostic)
+        models.ts        # GET /v1/models (merged from all providers)
 ```
 
 ## Limitations
 
-- **No custom tool definitions**: `tools` param ignored. Use `allowed_tools`/`disallowed_tools` for built-in tools, `mcp_config` for custom tool servers.
-- **No sampling params**: `temperature`, `top_p`, `top_k`, `stop_sequences` ignored.
+- **No custom tool definitions**: `tools` param ignored for Claude. Use `allowed_tools`/`disallowed_tools` for built-in tools, `mcp_config` for custom tool servers.
+- **Ollama is text-only**: Tool use, vision, and Claude-specific features (MCP, permissions, worktrees) are not available for Ollama models.
 - **No token counting endpoint**: `POST /v1/messages/count_tokens` not available.
 - **No batches endpoint**: `POST /v1/messages/batches` not implemented.
-- **Session memory is in-process**: Lost on server restart. Use `resume_session_id` for explicit session management.
+- **Session memory is in-process**: Lost on server restart. Use `resume_session_id` for explicit session management. Ollama models are stateless (full history sent each request).

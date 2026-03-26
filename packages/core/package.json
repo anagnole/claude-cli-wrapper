@@ -1,7 +1,7 @@
 {
   "name": "@anagnole/claude-cli-wrapper",
-  "version": "0.2.1",
-  "description": "Shared library for spawning, parsing, and managing Claude Code CLI sessions",
+  "version": "0.3.0",
+  "description": "Unified provider abstraction for Claude CLI and Ollama — one API for any model",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,6 +25,10 @@
     "./types": {
       "types": "./dist/types.d.ts",
       "default": "./dist/types.js"
+    },
+    "./provider": {
+      "types": "./dist/provider/index.d.ts",
+      "default": "./dist/provider/index.js"
     }
   },
   "files": [
@@ -37,9 +41,11 @@
   },
   "keywords": [
     "claude",
-    "cli",
+    "ollama",
+    "llm",
+    "provider",
     "anthropic",
-    "proxy",
+    "cli",
     "agent"
   ],
   "license": "MIT",

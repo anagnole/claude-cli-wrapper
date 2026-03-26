@@ -1,6 +1,6 @@
 # @anagnole/claude-cli-wrapper
 
-A shared library for spawning, parsing, and managing [Claude Code CLI](https://code.claude.com) sessions from TypeScript/Node.js. Exposes the full power of the CLI — MCP servers, permission modes, tool control, git worktrees, cost limits, and more.
+A shared library providing a unified provider abstraction for [Claude Code CLI](https://code.claude.com) and [Ollama](https://ollama.com) models from TypeScript/Node.js. Use Claude, Llama, Mistral, or any Ollama model through one API — all returning Anthropic Messages API format.
 
 ## Install
 
@@ -8,30 +8,87 @@ A shared library for spawning, parsing, and managing [Claude Code CLI](https://c
 npm install @anagnole/claude-cli-wrapper
 ```
 
-Requires the Claude CLI (`claude`) to be installed and available in your PATH.
+Requires the Claude CLI (`claude`) for Claude models, and/or Ollama for open-source models.
 
-## Basic usage
+## Provider abstraction
+
+The `ProviderRegistry` routes requests to the right provider based on model ID. Claude models go through the CLI, everything else falls through to Ollama.
 
 ```typescript
-import { spawnClaude, NdjsonParser } from "@anagnole/claude-cli-wrapper";
+import {
+  ProviderRegistry,
+  ClaudeCliProvider,
+  OllamaProvider,
+} from "@anagnole/claude-cli-wrapper";
 
-// Spawn a Claude CLI process
-const child = spawnClaude({
-  prompt: "Explain this codebase",
-  model: "claude-sonnet-4-6",
-  streaming: true,
+const registry = new ProviderRegistry();
+registry.register(new ClaudeCliProvider({ defaultModel: "claude-sonnet-4-6" }));
+registry.register(new OllamaProvider({ baseUrl: "http://localhost:11434" }));
+
+// Route automatically by model ID
+const provider = registry.resolve("llama3.2:3b");   // → OllamaProvider
+const provider2 = registry.resolve("claude-sonnet-4-6"); // → ClaudeCliProvider
+
+// Same API regardless of provider
+const response = await provider.complete({
+  model: "llama3.2:3b",
+  messages: [{ role: "user", content: "Hello" }],
+});
+console.log(response.content[0].text);
+```
+
+### Streaming
+
+```typescript
+const cancel = provider.stream(request, {
+  onEvent: (sse) => process.stdout.write(sse),
+  onDone: (result) => console.log("done:", result.assistantText),
+  onError: (err) => console.error(err),
 });
 
-// Parse streaming NDJSON output
-const parser = new NdjsonParser();
-child.stdout.on("data", (chunk) => {
-  for (const event of parser.feed(chunk.toString())) {
-    console.log(event);
-  }
+// Cancel anytime
+cancel();
+```
+
+### List all models
+
+```typescript
+const models = await registry.listAllModels();
+// [{ id: "claude-sonnet-4-6", provider: "claude-cli", ... },
+//  { id: "llama3.2:3b", provider: "ollama", ... }, ...]
+```
+
+### Use a provider directly
+
+```typescript
+const ollama = new OllamaProvider({ baseUrl: "http://gpu-box:11434" });
+const response = await ollama.complete({
+  model: "mistral:7b",
+  messages: [{ role: "user", content: "Hello" }],
 });
 ```
 
-## Full CLI options
+### Custom providers
+
+Implement the `Provider` interface to add any model source:
+
+```typescript
+import type { Provider } from "@anagnole/claude-cli-wrapper";
+
+class TogetherProvider implements Provider {
+  readonly name = "together";
+  canHandle(model: string) { return model.startsWith("together/"); }
+  async listModels() { /* ... */ }
+  async complete(request) { /* ... */ }
+  stream(request, callbacks) { /* ... */ }
+}
+
+registry.register(new TogetherProvider({ apiKey: "..." }));
+```
+
+## Low-level CLI access
+
+For full control over the Claude CLI process:
 
 ```typescript
 import { spawnClaude } from "@anagnole/claude-cli-wrapper";
@@ -40,125 +97,35 @@ const child = spawnClaude({
   prompt: "Fix the auth bug",
   model: "claude-sonnet-4-6",
   streaming: false,
-
-  // System prompt
   systemPrompt: "You are a senior engineer.",
-  appendSystemPrompt: true,
-
-  // Session management
-  resumeSessionId: "uuid-from-previous-run",
-  // or: continueConversation: true,
-  // or: forkSession: true,
-
-  // Permissions & tools
   permissionMode: "bypassPermissions",
   allowedTools: ["Bash(git *)", "Read", "Edit"],
-  disallowedTools: ["Write"],
-  // cliTools: "" to disable all, "default" for all
-
-  // MCP servers
   mcpConfig: "/path/to/mcp-config.json",
-  strictMcpConfig: true,
-
-  // Workspace
   workingDirectory: "/path/to/project",
-  worktree: "feature-branch",
-  addDirs: ["../shared-lib"],
-
-  // Safety limits
   maxTurns: 10,
   maxBudgetUsd: 1.00,
-
-  // Other
-  effort: "high",
-  fallbackModel: "claude-haiku-4-5",
-  claudePath: "/custom/path/to/claude",
-  jsonSchema: { type: "object", properties: { answer: { type: "string" } } },
 });
 ```
 
-## Session management
-
-`SessionMap` tracks CLI sessions by hashing message history. On resume, it returns the session ID **and** the original spawn options — so system prompts, MCP configs, permissions, etc. are automatically restored.
-
-```typescript
-import { spawnClaude, SessionMap, type MessageParam } from "@anagnole/claude-cli-wrapper";
-
-const sessions = new SessionMap();
-
-// First request — no session to resume
-const messages: MessageParam[] = [
-  { role: "user", content: "Hello" },
-];
-
-const spawnOpts = {
-  model: "claude-sonnet-4-6",
-  systemPrompt: "You are a helpful assistant.",
-  mcpConfig: "/path/to/mcp.json",
-  permissionMode: "bypassPermissions",
-};
-
-const child = spawnClaude({ ...spawnOpts, prompt: "Hello", streaming: false });
-// ... collect response, get cliSessionId ...
-
-// Store session with its options
-sessions.store(
-  [...messages, { role: "assistant", content: "Hi!" }],
-  "cli-session-uuid",
-  "claude-sonnet-4-6",
-  spawnOpts,  // stored for replay on resume
-);
-
-// Second request — session + options restored automatically
-const nextMessages: MessageParam[] = [
-  { role: "user", content: "Hello" },
-  { role: "assistant", content: "Hi!" },
-  { role: "user", content: "What did I say?" },
-];
-
-const hash = SessionMap.hashContext(nextMessages);
-const saved = sessions.lookup(hash, "claude-sonnet-4-6");
-
-if (saved) {
-  // saved.options contains: systemPrompt, mcpConfig, permissionMode, etc.
-  const child = spawnClaude({
-    ...saved.options,
-    resumeSessionId: saved.sessionId,
-    prompt: "What did I say?",
-    streaming: false,
-  });
-}
-```
-
-## Transform helpers
-
-```typescript
-import {
-  extractPrompt,      // Get last user message as text
-  extractSystem,      // Flatten system prompt blocks to string
-  warnUnsupported,    // Log warnings for unsupported API params
-  buildResponse,      // CLI JSON result → Anthropic API response shape
-  generateMsgId,      // Generate msg_... IDs
-  createStreamState,  // Initialize SSE streaming state
-  transformEvent,     // CLI NDJSON event → Anthropic SSE strings
-} from "@anagnole/claude-cli-wrapper";
-```
-
 ## Subpath imports
-
-For lighter imports that avoid pulling in all modules:
 
 ```typescript
 import { spawnClaude } from "@anagnole/claude-cli-wrapper/cli";
 import { NdjsonParser } from "@anagnole/claude-cli-wrapper/parser";
 import { SessionMap } from "@anagnole/claude-cli-wrapper/session";
+import { ProviderRegistry } from "@anagnole/claude-cli-wrapper/provider";
 import type { MessagesRequest } from "@anagnole/claude-cli-wrapper/types";
 ```
 
 ## All exports
 
 ```typescript
-// CLI
+// Providers
+ProviderRegistry, ClaudeCliProvider, OllamaProvider
+Provider, ModelInfo, ProviderStreamCallbacks  // types
+ClaudeCliProviderOptions, OllamaProviderConfig // types
+
+// CLI (low-level)
 spawnClaude, SpawnOptions, NdjsonParser
 
 // Session
@@ -176,4 +143,4 @@ MessagesRequest, MessagesResponse, Usage, ApiError, apiError
 
 ## Companion: API server
 
-This package also comes with a companion HTTP server (`@anagnole/claude-api-server`) that wraps the core library as an Anthropic Messages API-compatible endpoint. See the [monorepo README](https://github.com/anagnole/claude-api) for details.
+This package also comes with a companion HTTP server (`@anagnole/claude-api-server`) that wraps the provider registry as an Anthropic Messages API-compatible endpoint. See the [monorepo README](https://github.com/anagnole/claude-api) for details.

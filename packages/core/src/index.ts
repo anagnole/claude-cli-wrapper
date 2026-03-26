@@ -13,6 +13,14 @@ export { buildResponse, generateMsgId } from "./transform/response.js";
 export { createStreamState, transformEvent } from "./transform/stream.js";
 export type { StreamState } from "./transform/stream.js";
 
+// Providers
+export type { Provider, ModelInfo, ProviderStreamCallbacks } from "./provider/types.js";
+export { ProviderRegistry } from "./provider/registry.js";
+export { ClaudeCliProvider } from "./provider/claude-cli-provider.js";
+export type { ClaudeCliProviderOptions } from "./provider/claude-cli-provider.js";
+export { OllamaProvider } from "./provider/ollama-provider.js";
+export type { OllamaProviderConfig } from "./provider/ollama-provider.js";
+
 // Types
 export type {
   ContentBlock,
