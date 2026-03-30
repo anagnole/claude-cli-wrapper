@@ -1,6 +1,6 @@
 # @anagnole/claude-cli-wrapper
 
-A shared library providing a unified provider abstraction for [Claude Code CLI](https://code.claude.com) and [Ollama](https://ollama.com) models from TypeScript/Node.js. Use Claude, Llama, Mistral, or any Ollama model through one API — all returning Anthropic Messages API format.
+A shared library providing a unified provider abstraction for [Claude Code CLI](https://code.claude.com), [Ollama](https://ollama.com), and [OpenRouter](https://openrouter.ai) models from TypeScript/Node.js. Use Claude, Llama, Mistral, or any Ollama/OpenRouter model through one API — all returning Anthropic Messages API format.
 
 ## Install
 
@@ -8,26 +8,29 @@ A shared library providing a unified provider abstraction for [Claude Code CLI](
 npm install @anagnole/claude-cli-wrapper
 ```
 
-Requires the Claude CLI (`claude`) for Claude models, and/or Ollama for open-source models.
+Requires the Claude CLI (`claude`) for Claude models, and/or Ollama for local models, and/or an OpenRouter API key for free cloud models.
 
 ## Provider abstraction
 
-The `ProviderRegistry` routes requests to the right provider based on model ID. Claude models go through the CLI, everything else falls through to Ollama.
+The `ProviderRegistry` routes requests to the right provider based on model ID. Claude models go through the CLI, `openrouter/` prefixed models go to OpenRouter, everything else falls through to Ollama.
 
 ```typescript
 import {
   ProviderRegistry,
   ClaudeCliProvider,
   OllamaProvider,
+  OpenRouterProvider,
 } from "@anagnole/claude-cli-wrapper";
 
 const registry = new ProviderRegistry();
 registry.register(new ClaudeCliProvider({ defaultModel: "claude-sonnet-4-6" }));
+registry.register(new OpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY! }));
 registry.register(new OllamaProvider({ baseUrl: "http://localhost:11434" }));
 
 // Route automatically by model ID
 const provider = registry.resolve("llama3.2:3b");   // → OllamaProvider
 const provider2 = registry.resolve("claude-sonnet-4-6"); // → ClaudeCliProvider
+const provider3 = registry.resolve("openrouter/meta-llama/llama-3.3-70b-instruct:free"); // → OpenRouterProvider
 
 // Same API regardless of provider
 const response = await provider.complete({
@@ -64,6 +67,13 @@ const models = await registry.listAllModels();
 const ollama = new OllamaProvider({ baseUrl: "http://gpu-box:11434" });
 const response = await ollama.complete({
   model: "mistral:7b",
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// OpenRouter — free cloud models, no GPU needed
+const openrouter = new OpenRouterProvider({ apiKey: "sk-or-..." });
+const response2 = await openrouter.complete({
+  model: "meta-llama/llama-3.3-70b-instruct:free",
   messages: [{ role: "user", content: "Hello" }],
 });
 ```
@@ -121,9 +131,9 @@ import type { MessagesRequest } from "@anagnole/claude-cli-wrapper/types";
 
 ```typescript
 // Providers
-ProviderRegistry, ClaudeCliProvider, OllamaProvider
+ProviderRegistry, ClaudeCliProvider, OllamaProvider, OpenRouterProvider
 Provider, ModelInfo, ProviderStreamCallbacks  // types
-ClaudeCliProviderOptions, OllamaProviderConfig // types
+ClaudeCliProviderOptions, OllamaProviderConfig, OpenRouterProviderConfig // types
 
 // CLI (low-level)
 spawnClaude, SpawnOptions, NdjsonParser

@@ -1,7 +1,7 @@
 {
   "name": "@anagnole/claude-cli-wrapper",
   "version": "0.3.0",
-  "description": "Unified provider abstraction for Claude CLI and Ollama — one API for any model",
+  "description": "Unified provider abstraction for Claude CLI, Ollama, and OpenRouter — one API for any model",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -42,6 +42,7 @@
   "keywords": [
     "claude",
     "ollama",
+    "openrouter",
     "llm",
     "provider",
     "anthropic",

@@ -1,11 +1,11 @@
 # claude-api
 
-A monorepo with two packages that provide a unified Anthropic Messages API for **Claude** (via the CLI) and **open-source models** (via Ollama):
+A monorepo with two packages that provide a unified Anthropic Messages API for **Claude** (via the CLI), **open-source models** (via Ollama), and **free cloud models** (via OpenRouter):
 
-- **[`@anagnole/claude-cli-wrapper`](https://www.npmjs.com/package/@anagnole/claude-cli-wrapper)** — Shared library with a provider abstraction for Claude CLI and Ollama. Published on npm — install with `npm install @anagnole/claude-cli-wrapper`.
-- **`@anagnole/claude-api-server`** — Anthropic Messages API-compatible HTTP server. Point any Anthropic SDK at it and use Claude, Llama, Mistral, or any Ollama model through one endpoint.
+- **[`@anagnole/claude-cli-wrapper`](https://www.npmjs.com/package/@anagnole/claude-cli-wrapper)** — Shared library with a provider abstraction for Claude CLI, Ollama, and OpenRouter. Published on npm — install with `npm install @anagnole/claude-cli-wrapper`.
+- **`@anagnole/claude-api-server`** — Anthropic Messages API-compatible HTTP server. Point any Anthropic SDK at it and use Claude, Llama, Mistral, or any Ollama/OpenRouter model through one endpoint.
 
-The provider abstraction makes it easy to add new providers. Claude models route through the CLI (with full MCP, permissions, worktree support). Everything else routes to Ollama by default.
+The provider abstraction makes it easy to add new providers. Claude models route through the CLI (with full MCP, permissions, worktree support). OpenRouter provides free cloud-hosted models (no GPU required). Everything else routes to Ollama by default.
 
 ## Quick start
 
@@ -38,16 +38,19 @@ import {
   ProviderRegistry,
   ClaudeCliProvider,
   OllamaProvider,
+  OpenRouterProvider,
 } from "@anagnole/claude-cli-wrapper";
 
-// Build a registry with both providers
+// Build a registry with all providers
 const registry = new ProviderRegistry();
 registry.register(new ClaudeCliProvider({ defaultModel: "claude-sonnet-4-6" }));
+registry.register(new OpenRouterProvider({ apiKey: process.env.OPENROUTER_API_KEY! }));
 registry.register(new OllamaProvider({ baseUrl: "http://localhost:11434" }));
 
 // Route automatically by model ID
 const provider = registry.resolve("llama3.2:3b");   // → OllamaProvider
 const provider2 = registry.resolve("claude-sonnet-4-6"); // → ClaudeCliProvider
+const provider3 = registry.resolve("openrouter/meta-llama/llama-3.3-70b-instruct:free"); // → OpenRouterProvider
 
 // Same API regardless of provider
 const response = await provider.complete({
@@ -70,6 +73,13 @@ Or use a provider directly:
 const ollama = new OllamaProvider({ baseUrl: "http://gpu-box:11434" });
 const response = await ollama.complete({
   model: "mistral:7b",
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// OpenRouter — free cloud models, no GPU needed
+const openrouter = new OpenRouterProvider({ apiKey: "sk-or-..." });
+const response2 = await openrouter.complete({
+  model: "meta-llama/llama-3.3-70b-instruct:free",
   messages: [{ role: "user", content: "Hello" }],
 });
 ```
@@ -120,9 +130,9 @@ child.stdout.on("data", (chunk) => {
 
 ```typescript
 // Providers
-ProviderRegistry, ClaudeCliProvider, OllamaProvider
+ProviderRegistry, ClaudeCliProvider, OllamaProvider, OpenRouterProvider
 Provider, ModelInfo, ProviderStreamCallbacks  // types
-ClaudeCliProviderOptions, OllamaProviderConfig // types
+ClaudeCliProviderOptions, OllamaProviderConfig, OpenRouterProviderConfig // types
 
 // CLI (low-level)
 spawnClaude, SpawnOptions, NdjsonParser
@@ -150,9 +160,12 @@ For projects using any language/SDK that speaks the Anthropic Messages API. Supp
 pnpm dev
 # or with custom config:
 OLLAMA_BASE_URL=http://gpu-box:11434 CLAUDE_API_PORT=4301 pnpm dev
+
+# Enable OpenRouter (free cloud models):
+OPENROUTER_API_KEY=sk-or-... pnpm dev
 ```
 
-If Ollama is running, its models are available immediately. No config needed.
+If Ollama is running, its models are available immediately. OpenRouter activates automatically when `OPENROUTER_API_KEY` is set.
 
 #### Environment variables (for your client)
 
@@ -225,6 +238,14 @@ curl http://127.0.0.1:4301/v1/messages \
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 
+# OpenRouter model (free, no GPU needed)
+curl http://127.0.0.1:4301/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
 # Streaming
 curl -N http://127.0.0.1:4301/v1/messages \
   -H "Content-Type: application/json" \
@@ -248,7 +269,7 @@ Accepts the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages)
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `model` | string | Yes | Any Claude model (`claude-sonnet-4-6`) or Ollama model (`llama3.2:3b`, `mistral:7b`) |
+| `model` | string | Yes | Claude (`claude-sonnet-4-6`), Ollama (`llama3.2:3b`), or OpenRouter (`openrouter/meta-llama/llama-3.3-70b-instruct:free`) |
 | `messages` | array | Yes | `[{ role, content }]` |
 | `max_tokens` | number | No | Accepted but not enforced |
 | `system` | string/array | No | System prompt |
@@ -256,7 +277,7 @@ Accepts the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages)
 | `effort` | string | No | `"low"` / `"medium"` / `"high"` / `"max"` |
 | `json_schema` | object | No | Structured output schema |
 
-**Ignored by Claude CLI**: `temperature`, `top_p`, `top_k`, `stop_sequences`, `tools`, `tool_choice` (Ollama supports `temperature`, `top_p`, `top_k`, `stop_sequences`)
+**Ignored by Claude CLI**: `temperature`, `top_p`, `top_k`, `stop_sequences`, `tools`, `tool_choice` (Ollama supports `temperature`, `top_p`, `top_k`, `stop_sequences`; OpenRouter supports `temperature`, `top_p`, `stop_sequences`)
 
 #### CLI extension parameters
 
@@ -342,6 +363,10 @@ You can also pass `resume_session_id` directly (returned as `session_id` in ever
 | `OLLAMA_ENABLED` | `true` | Set to `"false"` to disable Ollama |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
 | `OLLAMA_MODEL_PREFIX` | `""` | Optional prefix (e.g. `"ollama/"`) to namespace model IDs |
+| `OPENROUTER_API_KEY` | — | OpenRouter API key. Provider is enabled automatically when set |
+| `OPENROUTER_ENABLED` | `true` (if key set) | Set to `"false"` to disable OpenRouter |
+| `OPENROUTER_MODEL_PREFIX` | `"openrouter/"` | Prefix for model IDs (e.g. `openrouter/meta-llama/...`) |
+| `OPENROUTER_FREE_ONLY` | `true` | Set to `"false"` to list paid models too |
 
 ## Architecture
 
@@ -356,6 +381,7 @@ packages/
         registry.ts      # ProviderRegistry — model routing + merged listing
         claude-cli-provider.ts  # Claude CLI provider (spawn, sessions, transforms)
         ollama-provider.ts      # Ollama HTTP provider (translate ↔ Anthropic format)
+        openrouter-provider.ts  # OpenRouter HTTP provider (free cloud models)
       cli/
         spawn.ts         # Spawn claude CLI with all flags
         parser.ts        # NDJSON line parser
@@ -368,7 +394,7 @@ packages/
   server/                # @anagnole/claude-api-server — HTTP API
     src/
       server.ts          # Fastify setup + provider registry
-      config.ts          # Env-based config (Claude + Ollama)
+      config.ts          # Env-based config (Claude + Ollama + OpenRouter)
       routes/
         messages.ts      # POST /v1/messages (provider-agnostic)
         models.ts        # GET /v1/models (merged from all providers)
@@ -377,7 +403,8 @@ packages/
 ## Limitations
 
 - **No custom tool definitions**: `tools` param ignored for Claude. Use `allowed_tools`/`disallowed_tools` for built-in tools, `mcp_config` for custom tool servers.
-- **Ollama is text-only**: Tool use, vision, and Claude-specific features (MCP, permissions, worktrees) are not available for Ollama models.
+- **Ollama and OpenRouter are text-only**: Tool use, vision, and Claude-specific features (MCP, permissions, worktrees) are not available for Ollama or OpenRouter models.
+- **OpenRouter free tier has rate limits**: Free models on OpenRouter have per-minute and per-day rate limits that vary by model.
 - **No token counting endpoint**: `POST /v1/messages/count_tokens` not available.
 - **No batches endpoint**: `POST /v1/messages/batches` not implemented.
 - **Session memory is in-process**: Lost on server restart. Use `resume_session_id` for explicit session management. Ollama models are stateless (full history sent each request).

@@ -20,6 +20,8 @@ export { ClaudeCliProvider } from "./provider/claude-cli-provider.js";
 export type { ClaudeCliProviderOptions } from "./provider/claude-cli-provider.js";
 export { OllamaProvider } from "./provider/ollama-provider.js";
 export type { OllamaProviderConfig } from "./provider/ollama-provider.js";
+export { OpenRouterProvider } from "./provider/openrouter-provider.js";
+export type { OpenRouterProviderConfig } from "./provider/openrouter-provider.js";
 
 // Types
 export type {

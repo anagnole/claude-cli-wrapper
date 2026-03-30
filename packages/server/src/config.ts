@@ -7,4 +7,9 @@ export const config = {
   ollamaEnabled: process.env.OLLAMA_ENABLED !== "false",
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
   ollamaModelPrefix: process.env.OLLAMA_MODEL_PREFIX ?? "",
+  // OpenRouter
+  openrouterEnabled: process.env.OPENROUTER_ENABLED !== "false" && !!process.env.OPENROUTER_API_KEY,
+  openrouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+  openrouterModelPrefix: process.env.OPENROUTER_MODEL_PREFIX ?? "openrouter/",
+  openrouterFreeOnly: process.env.OPENROUTER_FREE_ONLY !== "false",
 };

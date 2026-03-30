@@ -4,6 +4,7 @@ import {
   ProviderRegistry,
   ClaudeCliProvider,
   OllamaProvider,
+  OpenRouterProvider,
 } from "@anagnole/claude-cli-wrapper";
 import { config } from "./config.js";
 import { messagesRoute } from "./routes/messages.js";
@@ -24,6 +25,16 @@ if (config.ollamaEnabled) {
     new OllamaProvider({
       baseUrl: config.ollamaBaseUrl,
       modelPrefix: config.ollamaModelPrefix,
+    }),
+  );
+}
+
+if (config.openrouterEnabled) {
+  registry.register(
+    new OpenRouterProvider({
+      apiKey: config.openrouterApiKey,
+      modelPrefix: config.openrouterModelPrefix,
+      freeOnly: config.openrouterFreeOnly,
     }),
   );
 }
