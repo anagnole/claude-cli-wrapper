@@ -147,6 +147,7 @@ export class OpenRouterProvider implements Provider {
       const msgId = generateMsgId();
 
       let started = false;
+      let finished = false;
       let assistantText = "";
       let buffer = "";
 
@@ -205,7 +206,8 @@ export class OpenRouterProvider implements Provider {
               }));
             }
 
-            if (finishReason) {
+            if (finishReason && !finished) {
+              finished = true;
               const stopReason = finishReason === "length" ? "max_tokens" : "end_turn";
               callbacks.onEvent(sse("content_block_stop", {
                 type: "content_block_stop",
